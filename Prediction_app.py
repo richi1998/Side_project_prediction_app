@@ -16,7 +16,6 @@ for package in required_packages:
     except ImportError:
         install(package)
 
-
 import streamlit as st
 import yfinance as yf
 import numpy as np
