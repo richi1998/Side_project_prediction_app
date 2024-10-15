@@ -36,6 +36,9 @@ import time
 keywords = ["earnings", "profit", "revenue", "investment", "acquisition", "merger",
             "regulation", "forecast", "financial", "market", "stock", "share", "dividend"]
 
+# List of restricted sources
+restricted_sources = ["cnbc.com", "bloomberg.com"]
+
 # Function to filter articles based on keywords
 def is_relevant_article(title, keywords):
     title = title.lower()
@@ -94,27 +97,33 @@ def fetch_article_content(url):
 
         return article_text[:1000] + "..." if len(article_text) > 1000 else article_text
 
-    except requests.RequestException as e:
-        return None  # Return None for inaccessible content
+    except requests.HTTPError as e:
+        if response.status_code == 403:
+            st.write("⚠️ Access to this article is restricted (403 Forbidden).")
+        return None  # Skip content on access restriction
+    except requests.RequestException:
+        return None  # Skip content on general errors
 
 # Function to analyze sentiment of each article's content
 def analyze_article_content(articles):
     sentiments = []
     for article in articles:
+        # Skip restricted sources
+        if any(restricted in article['site'] for restricted in restricted_sources):
+            st.write(f"⚠️ Content restricted for source: '{article['site']}'. Skipping this article.")
+            continue
+        
         full_text = fetch_article_content(article['link'])
         
-        # Skip analysis if the content cannot be fetched
         if full_text is None:
             st.write(f"⚠️ Failed to fetch content for: '{article['title']}' (Source: {article['site']}). Skipping sentiment analysis for this article.")
             continue
 
-        # Display the article details and content snippet
         st.write(f"Title: {article['title']}")
         st.write(f"Source: {article['site']}")
         st.write(f"Content Snippet: {full_text[:300]}")
         st.write(f"[Read More]({article['link']})")
         
-        # Perform sentiment analysis on accessible articles only
         sentiment = analyze_sentiment(full_text)
         sentiments.append(sentiment)
         st.write(f"Sentiment Score: {sentiment:.2f}")
@@ -150,7 +159,6 @@ def predict_with_uncertainty(model, X, num_samples=100):
 
 # Main function to analyze stock and display results
 def analyze_stock(ticker, start_date, end_date, sequence_length, lstm_units):
-    # Fetch and filter relevant news articles
     news_articles = fetch_tickertick_news(ticker, max_results=5)
     relevant_articles = filter_relevant_articles(news_articles, keywords)
     
@@ -264,4 +272,3 @@ if st.sidebar.button("Analyze and Predict"):
     for ticker in tickers:
         st.write(f"## Analysis for {ticker}")
         analyze_stock(ticker.strip(), start_date, end_date, sequence_length, lstm_units)
-
