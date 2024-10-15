@@ -1,3 +1,22 @@
+import subprocess
+import sys
+
+# Function to install packages
+def install(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# List of required packages
+required_packages = ["yfinance", "numpy", "pandas", "scikit-learn", "tensorflow", 
+                     "plotly", "requests", "beautifulsoup4", "textblob"]
+
+# Install each package if it's not already installed
+for package in required_packages:
+    try:
+        __import__(package)
+    except ImportError:
+        install(package)
+
+
 import streamlit as st
 import yfinance as yf
 import numpy as np
