@@ -1,3 +1,4 @@
+https://sideprojectpredictionapp-cnkz8apzjk8bk3vgkvykdp.streamlit.app
 # 📈 Stock Price Prediction and News Sentiment Analysis App
 
 This app predicts stock prices using a Long Short-Term Memory (LSTM) neural network and analyzes the sentiment of recent news articles related to a specific stock. Built with Streamlit, the app fetches stock data, scrapes relevant news, performs sentiment analysis, and visualizes the results. The prediction model incorporates sentiment analysis to enhance its accuracy.
