@@ -36,8 +36,24 @@ import time
 keywords = ["earnings", "profit", "revenue", "investment", "acquisition", "merger",
             "regulation", "forecast", "financial", "market", "stock", "share", "dividend"]
 
-# List of restricted sources
-restricted_sources = ["cnbc.com", "bloomberg.com"]
+# Categorize news sources based on type
+financial_sources = ["bloomberg.com", "marketwatch.com", "financialtimes.com", "cnbc.com"]
+general_news_sources = ["reuters.com", "cnn.com", "bbc.com"]
+local_news_sources = ["nytimes.com", "latimes.com", "chicagotribune.com"]
+opinion_pieces_sources = ["forbes.com", "seekingalpha.com", "wsj.com"]
+
+# Function to categorize news sources
+def categorize_news_source(site):
+    if any(fin_source in site for fin_source in financial_sources):
+        return "Financial-specific"
+    elif any(gen_source in site for gen_source in general_news_sources):
+        return "General News"
+    elif any(loc_source in site for loc_source in local_news_sources):
+        return "Local News"
+    elif any(opin_source in site for opin_source in opinion_pieces_sources):
+        return "Opinion Piece"
+    else:
+        return "Other"
 
 # Function to filter articles based on keywords
 def is_relevant_article(title, keywords):
@@ -60,11 +76,14 @@ def fetch_tickertick_news(ticker, max_results=5):
         articles = []
         for story in news_data:
             date = datetime.fromtimestamp(story['time'] / 1000)
+            site = story['site']
+            category = categorize_news_source(site)  # Categorize news source
             articles.append({
                 'title': story['title'],
                 'link': story['url'],
                 'date': date,
-                'site': story['site']
+                'site': site,
+                'category': category  # Add category
             })
         
         return articles
@@ -111,11 +130,6 @@ def analyze_article_content(articles):
     progress = st.progress(0)
 
     for idx, article in enumerate(articles):
-        # Filter out restricted sources before attempting to fetch the content
-        if any(restricted in article['site'] for restricted in restricted_sources):
-            st.write(f"⚠️ Content restricted for source: '{article['site']}'. Skipping this article.")
-            continue
-        
         full_text = fetch_article_content(article['link'])
         
         if full_text is None:
@@ -124,6 +138,7 @@ def analyze_article_content(articles):
 
         st.write(f"Title: {article['title']}")
         st.write(f"Source: {article['site']}")
+        st.write(f"Category: {article['category']}")  # Display news category
         st.write(f"Content Snippet: {full_text[:300]}")
         st.write(f"[Read More]({article['link']})")
         
@@ -163,6 +178,40 @@ def predict_with_uncertainty(model, X, num_samples=100):
     std = tf.math.reduce_std(predictions, axis=0)
     return mean, std
 
+# Function to add valuation metrics (like P/E ratio)
+def get_stock_fundamentals(ticker):
+    stock = yf.Ticker(ticker)
+    pe_ratio = stock.info.get("trailingPE", None)  # Fetch P/E ratio
+    return pe_ratio
+
+# Function to calculate moving averages
+def calculate_moving_averages(data, short_window=50, long_window=200):
+    data['50_MA'] = data['Adj Close'].rolling(window=short_window).mean()
+    data['200_MA'] = data['Adj Close'].rolling(window=long_window).mean()
+    if data['50_MA'].iloc[-1] > data['200_MA'].iloc[-1]:
+        return "Bullish"
+    else:
+        return "Bearish"
+
+# Enhanced recommendation logic
+def determine_buy_recommendation(sentiment, predicted_price_change, pe_ratio=None, moving_average_signal=None, long_term_growth=0.02, short_term_threshold=0.01):
+    # Long-term buy if sentiment is positive and predicted growth is decent
+    if sentiment >= 0 and predicted_price_change > long_term_growth:
+        if pe_ratio and pe_ratio < 20:  # Favor stocks that are not overvalued
+            return "Long-term Buy"
+        elif moving_average_signal == "Bullish":
+            return "Long-term Buy"
+        else:
+            return "Hold"
+    
+    # Short-term buy if predicted price change is reasonable for short term
+    elif sentiment >= -0.1 and predicted_price_change > short_term_threshold:
+        if moving_average_signal == "Bullish":
+            return "Short-term Buy"
+        return "Hold"
+    else:
+        return "Hold or Sell"
+
 # Main function to analyze stock and display results
 def analyze_stock(ticker, start_date, end_date, sequence_length, lstm_units):
     news_articles = fetch_tickertick_news(ticker, max_results=5)
@@ -198,6 +247,12 @@ def analyze_stock(ticker, start_date, end_date, sequence_length, lstm_units):
     )])
     fig.update_layout(title=f'{ticker} Price History', xaxis_title='Date', yaxis_title='Price (USD)')
     st.plotly_chart(fig)
+
+    # Calculate moving averages for trend analysis
+    moving_average_signal = calculate_moving_averages(data)
+
+    # Get stock fundamentals
+    pe_ratio = get_stock_fundamentals(ticker)
 
     # Prepare data for LSTM model
     close_prices = data[['Adj Close']]
@@ -246,6 +301,11 @@ def analyze_stock(ticker, start_date, end_date, sequence_length, lstm_units):
 
         st.metric(f"Predicted Price for {ticker}", f"${next_price_prediction:.2f}")
         st.write(f"95% Prediction Interval: ${lower_bound:.2f} to ${upper_bound:.2f}")
+
+        # Generate buy/hold/sell recommendation
+        recommendation = determine_buy_recommendation(avg_sentiment, next_price_prediction, pe_ratio, moving_average_signal)
+        st.write(f"### Recommendation: {recommendation}")
+
     except Exception as e:
         st.error(f"Error making prediction for {ticker}: {str(e)}")
         return
