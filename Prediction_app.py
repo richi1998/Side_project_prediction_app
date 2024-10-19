@@ -104,11 +104,14 @@ def fetch_article_content(url):
     except requests.RequestException:
         return None  # Skip content on general errors
 
-# Function to analyze sentiment of each article's content
+# Updated function to analyze sentiment of each article's content with progress bar
 def analyze_article_content(articles):
     sentiments = []
-    for article in articles:
-        # Skip restricted sources
+    total_articles = len(articles)
+    progress = st.progress(0)
+
+    for idx, article in enumerate(articles):
+        # Filter out restricted sources before attempting to fetch the content
         if any(restricted in article['site'] for restricted in restricted_sources):
             st.write(f"⚠️ Content restricted for source: '{article['site']}'. Skipping this article.")
             continue
@@ -128,6 +131,9 @@ def analyze_article_content(articles):
         sentiments.append(sentiment)
         st.write(f"Sentiment Score: {sentiment:.2f}")
         
+        # Update progress bar
+        progress.progress((idx + 1) / total_articles)
+
         # Sleep briefly to avoid hitting rate limits
         time.sleep(1)
 
